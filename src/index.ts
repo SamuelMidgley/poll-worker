@@ -1,32 +1,62 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { Hono } from "hono";
+import { cors } from "hono/cors"
+import { prettyJSON } from "hono/pretty-json"
 
-export interface Env {
-	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-	// MY_KV_NAMESPACE: KVNamespace;
-	//
-	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
-	// MY_DURABLE_OBJECT: DurableObjectNamespace;
-	//
-	// Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
-	// MY_BUCKET: R2Bucket;
-	//
-	// Example binding to a Service. Learn more at https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
-	// MY_SERVICE: Fetcher;
-	//
-	// Example binding to a Queue. Learn more at https://developers.cloudflare.com/queues/javascript-apis/
-	// MY_QUEUE: Queue;
+type Bindings = {
+	DB: D1Database	
 }
 
-export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return new Response('These polls are gonna be sick');
-	},
-};
+const app = new Hono<{ Bindings: Bindings }>()
+
+app.use('*', prettyJSON())
+app.use('/poll/*', cors())
+
+app.get("/poll/:id", async c => {
+	const pollId = c.req.param("id")
+
+	try {
+		const result = await c.env.DB.prepare('SELECT p.question, count(p.question) as num_votes FROM poll p LEFT JOIN poll_vote pv ON p.poll_id = pv.poll_id WHERE p.poll_id = ?').bind(pollId).first()
+		return c.json(result)
+	} catch (e) {
+		return c.json({ err: e }, 500)
+	}
+})
+
+app.get("/poll/:id/options", async c => {
+	const pollId = c.req.param("id")
+	try {
+		const { results } = await c.env.DB.prepare('SELECT * FROM poll_option WHERE poll_id = ?').bind(pollId).all()
+		return c.json(results)
+	} catch (e) {
+		return c.json({ err: e }, 500)
+	}
+})
+
+app.get("/poll/:id/votes", async c => {
+	const pollId = c.req.param("id")
+	try {
+		const { results } = await c.env.DB.prepare("SELECT po.option, count(pv.vote_id) as count FROM poll_vote pv LEFT JOIN poll_option po ON po.option_id = pv.option_id WHERE pv.poll_id = ? GROUP BY po.option").bind(pollId).all()
+		return c.json(results)
+	} catch (e) {
+		console.log(e)
+		return c.json({ err: e }, 500)
+	}
+})
+
+app.post("/poll/:id/vote", async c => {
+	const pollId = c.req.param("id")
+	const post = await c.req.json()
+	console.log(post.option_id)
+	try {
+		const info = await c.env.DB.prepare('INSERT INTO poll_vote (poll_id, option_id, date) VALUES (?1, ?2, ?3)')
+									.bind(pollId, post.option_id, post.date)
+									.run()
+		return c.json(info)
+	} catch (e) {
+		console.log("helelo")
+		console.log(e)
+		return c.json({ err: e }, 500)
+	}
+})
+
+export default app

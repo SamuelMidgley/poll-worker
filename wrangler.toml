@@ -2,6 +2,11 @@ name = "poll-worker"
 main = "src/index.ts"
 compatibility_date = "2023-11-21"
 
+[[d1_databases]]
+binding = "DB"                                       # available in your Worker on env.DB
+database_name = "dev_db_web"
+database_id = "9f03dec0-300a-48b3-ad5b-ec15068cad81"
+
 # Variable bindings. These are arbitrary, plaintext strings (similar to environment variables)
 # Note: Use secrets to store sensitive data.
 # Docs: https://developers.cloudflare.com/workers/platform/environment-variables
