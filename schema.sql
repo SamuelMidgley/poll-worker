@@ -19,5 +19,6 @@ CREATE TABLE poll_vote
     vote_id integer primary key AUTOINCREMENT,
     poll_id integer NOT NULL,
     option_id integer NOT NULL,
-    date string NOT NULL
+    date string NOT NULL,
+    ip_address text NOT NULL
 );

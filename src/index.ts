@@ -20,12 +20,14 @@ app.get('/poll/:id', async (c) => {
 	}
 
 	try {
-		const result = await c.env.DB.prepare(
-			'SELECT p.question, count(p.question) as num_votes FROM poll p LEFT JOIN poll_vote pv ON p.poll_id = pv.poll_id WHERE p.poll_id = ?'
-		)
-			.bind(pollId)
-			.first();
-		return c.json(result);
+		// best not to ask fella
+		const question = await c.env.DB.prepare('SELECT question FROM poll WHERE poll_id = ?').bind(pollId).first();
+		const num_votes = await c.env.DB.prepare('SELECT count(vote_id) as num_votes FROM poll_vote WHERE poll_id = ?').bind(pollId).first();
+
+		return c.json({
+			question: question?.question,
+			num_votes: num_votes?.num_votes,
+		});
 	} catch (e) {
 		return c.json({ err: e }, 500);
 	}
@@ -55,7 +57,7 @@ app.get('/poll/:id/results', async (c) => {
 
 	try {
 		const { results } = await c.env.DB.prepare(
-			'SELECT po.option_id, po.option, count(pv.vote_id) as count FROM poll_vote pv LEFT JOIN poll_option po ON po.option_id = pv.option_id WHERE pv.poll_id = ? GROUP BY po.option'
+			'SELECT po.option_id, po.option, COUNT(pv.option_id) AS count FROM poll_option po LEFT JOIN poll_vote pv ON po.option_id = pv.option_id WHERE po.poll_id = ? GROUP BY po.option_id, po.poll_id, po.option;'
 		)
 			.bind(pollId)
 			.all();
@@ -67,6 +69,8 @@ app.get('/poll/:id/results', async (c) => {
 });
 
 app.post('/poll/:id/vote', async (c) => {
+	const ip = c.req.header('X-Forwarded-For') || 'not found';
+
 	const pollId = c.req.param('id');
 	const post = await c.req.json();
 
@@ -75,12 +79,13 @@ app.post('/poll/:id/vote', async (c) => {
 	}
 
 	try {
-		const info = await c.env.DB.prepare('INSERT INTO poll_vote (poll_id, option_id, date) VALUES (?1, ?2, ?3)')
-			.bind(pollId, post.option_id, post.date)
+		const info = await c.env.DB.prepare('INSERT INTO poll_vote (poll_id, option_id, date, ip_address) VALUES (?1, ?2, ?3, ?4)')
+			.bind(pollId, post.option_id, post.date, ip)
 			.run();
 		return c.json(info);
 	} catch (e) {
-		return c.json({ err: e }, 500);
+		console.log(e);
+		return c.json({ err: JSON.stringify(e) }, 500);
 	}
 });
 
