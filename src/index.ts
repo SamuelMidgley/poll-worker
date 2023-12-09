@@ -10,7 +10,20 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.use('*', prettyJSON());
-app.use('/poll/*', cors());
+app.use(
+	'*',
+	cors({
+		origin: '*',
+		allowHeaders: ['Content-Type', 'Authorization'],
+		allowMethods: ['POST', 'GET', 'OPTIONS'],
+		exposeHeaders: ['Content-Length'],
+		maxAge: 600,
+		credentials: true,
+	})
+);
+app.options('*', (c) => {
+	return c.text('', 204);
+});
 
 app.get('/poll/:id', async (c) => {
 	const pollId = c.req.param('id');
